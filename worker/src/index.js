@@ -6,6 +6,9 @@ const QUESTION_MAX_LENGTH = 500;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX = 12;
 const ABUSIVE_PATTERN = /\b(?:kill yourself|kys|nigger|faggot|rape|rapist)\b/i;
+const GREETING_PATTERN = /^(?:hi|hello|hey|hiya|good morning|good afternoon|good evening)(?:\s+there)?[!.?]*$/i;
+const CAPABILITY_PATTERN = /^(?:help|what can you do|what do you do|who are you|how can you help|what should i ask)(?:\??)$/i;
+const SHORT_GENERIC_PATTERN = /^(?:thanks|thank you|ok|okay|cool|nice|test|testing)[!.?]*$/i;
 const rateLimitStore = new Map();
 const retrieveSources = createRetriever(contentIndex.items || []);
 
@@ -87,11 +90,26 @@ function isRejectedQuestion(question) {
   return ABUSIVE_PATTERN.test(question);
 }
 
+function isScopePrompt(question) {
+  return (
+    GREETING_PATTERN.test(question) ||
+    CAPABILITY_PATTERN.test(question) ||
+    SHORT_GENERIC_PATTERN.test(question)
+  );
+}
+
 function cleanAnswer(answer) {
   return String(answer || "")
     .replace(/\s+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function scopeAnswer() {
+  return [
+    "Hi. Ask about neighborhoods, WPCNA, agendas, events, community posting, the CNA Workshop Handbook, and local resources covered on this site.",
+    "Try something like: What does WPCNA do? Where can I find agendas? Tell me about Fisher Hill."
+  ].join("\n\n");
 }
 
 function dedupeSources(sources) {
@@ -167,6 +185,17 @@ export default {
 
     if (isRejectedQuestion(question)) {
       return errorResponse("That question cannot be processed by this civic assistant.", 422, corsHeaders || {});
+    }
+
+    if (isScopePrompt(question)) {
+      return jsonResponse(
+        {
+          answer: scopeAnswer(),
+          sources: []
+        },
+        200,
+        corsHeaders || {}
+      );
     }
 
     const retrievedSources = retrieveSources(question, {
